@@ -1,4 +1,5 @@
-use bitcoin::{secp256k1, PublicKey, Script, PubkeyHash, ScriptHash, WPubkeyHash, WScriptHash};
+use elements::{secp256k1, Script, PubkeyHash, ScriptHash, WPubkeyHash, WScriptHash};
+use bitcoin::PublicKey;
 use elements::Address;
 use serde::{Deserialize, Serialize};
 

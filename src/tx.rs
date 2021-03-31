@@ -1,16 +1,71 @@
 use elements::encode::serialize;
 use elements::{
 	bitcoin, confidential, AssetIssuance, PeginData, PegoutData, Transaction, TxIn, TxInWitness,
-	TxOut, TxOutWitness,
+	TxOut, TxOutWitness, Address, Script
 };
 use serde::{Deserialize, Serialize};
 
-use hal::tx::{InputScript, InputScriptInfo, OutputScript, OutputScriptInfo};
 use ::{GetInfo, Network, HexBytes};
 
 use confidential::{ConfidentialAssetInfo, ConfidentialNonceInfo, ConfidentialValueInfo};
 
 const BTCNET: elements::bitcoin::Network = elements::bitcoin::Network::Testnet;
+
+#[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
+pub struct OutputScriptInfo {
+	pub hex: Option<::HexBytes>,
+	pub asm: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none", rename = "type")]
+	pub type_: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub unblinded_address: Option<Address>,
+}
+
+pub struct OutputScript<'a>(pub &'a Script);
+
+impl<'a> ::GetInfo<OutputScriptInfo> for OutputScript<'a> {
+	fn get_info(&self, network: Network) -> OutputScriptInfo {
+		OutputScriptInfo {
+			hex: Some(self.0.to_bytes().into()),
+			asm: Some(self.0.asm()),
+			type_: Some(
+				if self.0.is_p2pk() {
+					"p2pk"
+				} else if self.0.is_p2pkh() {
+					"p2pkh"
+				} else if self.0.is_op_return() {
+					"opreturn"
+				} else if self.0.is_p2sh() {
+					"p2sh"
+				} else if self.0.is_v0_p2wpkh() {
+					"p2wpkh"
+				} else if self.0.is_v0_p2wsh() {
+					"p2wsh"
+				} else {
+					"unknown"
+				}
+				.to_owned(),
+			),
+			unblinded_address: Address::from_script(&self.0, None, network.address_params()),
+		}
+	}
+}
+#[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
+pub struct InputScriptInfo {
+	pub hex: Option<::HexBytes>,
+	pub asm: Option<String>,
+}
+
+pub struct InputScript<'a>(pub &'a Script);
+
+impl<'a> ::GetInfo<InputScriptInfo> for InputScript<'a> {
+	fn get_info(&self, _network: Network) -> InputScriptInfo {
+		InputScriptInfo {
+			hex: Some(self.0.to_bytes().into()),
+			asm: Some(self.0.asm()),
+		}
+	}
+}
 
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
 pub struct AssetIssuanceInfo {
@@ -95,7 +150,7 @@ impl GetInfo<InputWitnessInfo> for TxInWitness {
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
 pub struct InputInfo {
 	pub prevout: Option<String>,
-	pub txid: Option<bitcoin::Txid>,
+	pub txid: Option<elements::Txid>,
 	pub vout: Option<u32>,
 	pub script_sig: Option<InputScriptInfo>,
 	pub sequence: Option<u32>,
@@ -119,7 +174,7 @@ impl GetInfo<InputInfo> for TxIn {
 			txid: Some(self.previous_output.txid),
 			vout: Some(self.previous_output.vout),
 			sequence: Some(self.sequence),
-			script_sig: Some(hal::GetInfo::get_info(&InputScript(&self.script_sig), BTCNET)),
+			script_sig: Some(GetInfo::get_info(&InputScript(&self.script_sig), network)),
 
 			is_pegin: Some(self.is_pegin),
 			has_issuance: Some(self.has_issuance),
@@ -142,8 +197,8 @@ impl GetInfo<InputInfo> for TxIn {
 pub struct PegoutDataInfo {
 	pub value: u64,
 	pub asset: ConfidentialAssetInfo,
-	pub genesis_hash: bitcoin::BlockHash,
-	pub script_pub_key: OutputScriptInfo,
+	pub genesis_hash: elements::bitcoin::BlockHash,
+	pub script_pub_key: hal::tx::OutputScriptInfo,
 	pub extra_data: Vec<HexBytes>,
 }
 
@@ -153,7 +208,7 @@ impl<'tx> GetInfo<PegoutDataInfo> for PegoutData<'tx> {
 			value: self.value,
 			asset: self.asset.get_info(network),
 			genesis_hash: self.genesis_hash,
-			script_pub_key: hal::GetInfo::get_info(&OutputScript(&self.script_pubkey), BTCNET),
+			script_pub_key: hal::GetInfo::get_info(&hal::tx::OutputScript(&self.script_pubkey), BTCNET),
 			extra_data: self.extra_data.iter().map(|w| w.clone().into()).collect(),
 		}
 	}
@@ -206,7 +261,7 @@ impl GetInfo<OutputInfo> for TxOut {
 		};
 
 		OutputInfo {
-			script_pub_key: Some(hal::GetInfo::get_info(&OutputScript(&self.script_pubkey), BTCNET)),
+			script_pub_key: Some(GetInfo::get_info(&OutputScript(&self.script_pubkey), network)),
 			asset: Some(self.asset.get_info(network)),
 			value: Some(self.value.get_info(network)),
 			nonce: Some(self.nonce.get_info(network)),
@@ -219,9 +274,9 @@ impl GetInfo<OutputInfo> for TxOut {
 
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
 pub struct TransactionInfo {
-	pub txid: Option<bitcoin::Txid>,
-	pub wtxid: Option<bitcoin::Wtxid>,
-	pub hash: Option<bitcoin::Wtxid>,
+	pub txid: Option<elements::Txid>,
+	pub wtxid: Option<elements::Wtxid>,
+	pub hash: Option<elements::Wtxid>,
 	pub size: Option<usize>,
 	pub weight: Option<usize>,
 	pub vsize: Option<usize>,

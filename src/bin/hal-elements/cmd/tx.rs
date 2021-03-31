@@ -1,18 +1,20 @@
 use std::io::Write;
 
 use clap;
-use bitcoin::hashes::Hash;
-use bitcoin::{self, Network, Script};
+use bitcoin;
+use elements::hashes::Hash;
+use elements::Script;
 use elements::encode::{deserialize, serialize};
 use elements::{
 	confidential, AssetIssuance, OutPoint, Transaction, TxIn, TxInWitness, TxOut, TxOutWitness,
 };
 
 use cmd;
-use hal::tx::{InputScriptInfo, OutputScriptInfo};
+use hal_elements::tx::{InputScriptInfo, OutputScriptInfo};
 use hal_elements::confidential::{
 	ConfidentialAssetInfo, ConfidentialNonceInfo, ConfidentialType, ConfidentialValueInfo,
 };
+use hal_elements::Network;
 use hal_elements::tx::{
 	AssetIssuanceInfo, InputInfo, InputWitnessInfo, OutputInfo, OutputWitnessInfo, PeginDataInfo,
 	PegoutDataInfo, TransactionInfo,
@@ -116,7 +118,7 @@ fn create_confidential_nonce(info: ConfidentialNonceInfo) -> confidential::Nonce
 	match info.type_ {
 		ConfidentialType::Null => confidential::Nonce::Null,
 		ConfidentialType::Explicit => confidential::Nonce::Explicit(
-			info.nonce.expect("Field \"nonce\" is required for explicit nonces."),
+			info.nonce.expect("Field \"nonce\" is required for explicit nonces.").into_inner(),
 		),
 		ConfidentialType::Confidential => {
 			let comm = create_commitment(info.commitment);
@@ -164,7 +166,7 @@ fn create_script_sig(ss: InputScriptInfo) -> Script {
 	}
 }
 
-fn create_pegin_witness(pd: PeginDataInfo, prevout: OutPoint) -> Vec<Vec<u8>> {
+fn create_pegin_witness(pd: PeginDataInfo, prevout: bitcoin::OutPoint) -> Vec<Vec<u8>> {
 	let btc_prev = bitcoin::OutPoint::new(prevout.txid, prevout.vout);
 	if btc_prev != pd.outpoint.parse().expect("Invalid outpoint in field \"pegin_data\".") {
 		panic!("Outpoint in \"pegin_data\" does not correspond to input value.");
@@ -187,7 +189,7 @@ fn create_pegin_witness(pd: PeginDataInfo, prevout: OutPoint) -> Vec<Vec<u8>> {
 fn create_input_witness(
 	info: Option<InputWitnessInfo>,
 	pd: Option<PeginDataInfo>,
-	prevout: OutPoint,
+	prevout: bitcoin::OutPoint,
 ) -> TxInWitness {
 	let pegin_witness = if info.is_some() && info.as_ref().unwrap().pegin_witness.is_some() {
 		if pd.is_some() {
@@ -240,11 +242,17 @@ fn create_input(input: InputInfo) -> TxIn {
 			}
 			Default::default()
 		},
-		witness: create_input_witness(input.witness, input.pegin_data, prevout),
+		witness: {
+			let btc_prevout = bitcoin::OutPoint::new(
+				bitcoin::Txid::from_hash(prevout.txid.into()),
+				 prevout.vout
+			);
+			create_input_witness(input.witness, input.pegin_data, btc_prevout)
+		}
 	}
 }
 
-fn create_script_pubkey(spk: OutputScriptInfo, used_network: &mut Option<Network>) -> Script {
+fn create_pegout_script_pubkey(spk: hal::tx::OutputScriptInfo) -> bitcoin::Script {
 	if spk.type_.is_some() {
 		warn!("Field \"type\" of output is ignored.");
 	}
@@ -264,10 +272,41 @@ fn create_script_pubkey(spk: OutputScriptInfo, used_network: &mut Option<Network
 			warn!("Field \"address\" of output is ignored.");
 		}
 
+		//TODO(stevenroose) support script disassembly
 		panic!("Decoding script assembly is not yet supported.");
 	} else if let Some(address) = spk.address {
+		address.script_pubkey()
+	} else {
+		panic!("No scriptPubKey info provided.");
+	}
+}
+
+fn create_script_pubkey(spk: OutputScriptInfo, used_network: &mut Option<Network>) -> Script {
+	if spk.type_.is_some() {
+		warn!("Field \"type\" of output is ignored.");
+	}
+
+	if let Some(hex) = spk.hex {
+		if spk.asm.is_some() {
+			warn!("Field \"asm\" of output is ignored.");
+		}
+		if spk.unblinded_address.is_some() {
+			warn!("Field \"address\" of output is ignored.");
+		}
+
+		//TODO(stevenroose) do script sanity check to avoid blackhole?
+		hex.0.into()
+	} else if let Some(_) = spk.asm {
+		if spk.unblinded_address.is_some() {
+			warn!("Field \"address\" of output is ignored.");
+		}
+
+		panic!("Decoding script assembly is not yet supported.");
+	} else if let Some(address) = spk.unblinded_address {
 		// Error if another network had already been used.
-		if used_network.replace(address.network).unwrap_or(address.network) != address.network {
+		let net = Network::from_params(address.params).expect("Unknown address");
+		if used_network.replace(net)
+			.unwrap_or(net) != net {
 			panic!("Addresses for different networks are used in the output scripts.");
 		}
 
@@ -284,14 +323,15 @@ fn create_output_witness(w: OutputWitnessInfo) -> TxOutWitness {
 	}
 }
 
+// The network used is the bitcoin Network
+// so we do not maintain the network on the &mut used_network
 fn create_script_pubkey_from_pegout_data(
 	pd: PegoutDataInfo,
-	used_network: &mut Option<Network>,
 ) -> Script {
-	let mut builder = bitcoin::blockdata::script::Builder::new()
-		.push_opcode(bitcoin::blockdata::opcodes::all::OP_RETURN)
+	let mut builder = elements::script::Builder::new()
+		.push_opcode(elements::opcodes::all::OP_RETURN)
 		.push_slice(&pd.genesis_hash.into_inner()[..])
-		.push_slice(&create_script_pubkey(pd.script_pub_key, used_network)[..]);
+		.push_slice(&create_pegout_script_pubkey(pd.script_pub_key)[..]);
 	for d in pd.extra_data {
 		builder = builder.push_slice(&d.0);
 	}
@@ -332,7 +372,7 @@ fn create_output(output: OutputInfo) -> TxOut {
 			if asset != create_confidential_asset(pd.asset.clone()) {
 				panic!("Asset in \"pegout_data\" does not correspond to output value.");
 			}
-			create_script_pubkey_from_pegout_data(pd, &mut used_network)
+			create_script_pubkey_from_pegout_data(pd)
 		} else {
 			Default::default()
 		},

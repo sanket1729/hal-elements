@@ -1,6 +1,5 @@
-use bitcoin::hashes::sha256;
-use bitcoin::util::hash::BitcoinHash;
-use bitcoin::{BlockHash, TxMerkleNode, Txid};
+use elements::hashes::sha256;
+use elements::{BlockHash, TxMerkleNode, Txid};
 use elements::{dynafed, Block, BlockExtData, BlockHeader};
 use serde::{Deserialize, Serialize};
 
@@ -89,7 +88,7 @@ pub struct BlockHeaderInfo {
 impl<'a> GetInfo<BlockHeaderInfo> for BlockHeader {
 	fn get_info(&self, network: Network) -> BlockHeaderInfo {
 		let mut info = BlockHeaderInfo {
-			block_hash: Some(self.bitcoin_hash()),
+			block_hash: Some(self.block_hash()),
 			version: self.version,
 			previous_block_hash: self.prev_blockhash,
 			merkle_root: self.merkle_root,
