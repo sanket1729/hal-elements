@@ -30,5 +30,5 @@ serde_yaml = "0.8.8"
 hex = "0.3.2"
 
 elements = { git = "https://github.com/sanket1729/rust-elements", features = ["serde-feature"], branch = "pset" }
-elements-miniscript = { git = "https://github.com/sanket1729/elements-miniscript", branch = "pset" }
+elements-miniscript = { git = "https://github.com/sanket1729/elements-miniscript", features = ["compiler", "serde"], branch = "pset" }
 hal = {git = "https://github.com/stevenroose/hal", branch = "master"}

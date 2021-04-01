@@ -232,11 +232,12 @@ dependencies = [
 [[package]]
 name = "elements-miniscript"
 version = "0.0.1"
-source = "git+https://github.com/sanket1729/elements-miniscript?branch=pset#beaf709c3c2cb91fe1d5a767bd9897923b670597"
+source = "git+https://github.com/sanket1729/elements-miniscript?branch=pset#b507c376cc3f75c5057470acc5c54f2bbf600f45"
 dependencies = [
  "bitcoin",
  "elements",
  "miniscript",
+ "serde 1.0.125",
 ]
 
 [[package]]
@@ -555,9 +556,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.24"
+version = "1.0.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e0704ee1a7e00d7bb417d0770ea303c1bccbabf0ef1667dae92b5967f5f8a71"
+checksum = "a152013215dca273577e18d2bf00fa862b89b24169fb78c4c95aeb07992c9cec"
 dependencies = [
  "unicode-xid",
 ]
@@ -871,9 +872,9 @@ checksum = "2d67a5a62ba6e01cb2192ff309324cb4875d0c451d55fe2319433abe7a05a8ee"
 
 [[package]]
 name = "syn"
-version = "1.0.67"
+version = "1.0.68"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6498a9efc342871f91cc2d0d694c674368b4ceb40f62b65a7a08c3792935e702"
+checksum = "3ce15dd3ed8aa2f8eeac4716d6ef5ab58b6b9256db41d7e1a0224c2788e8fd87"
 dependencies = [
  "proc-macro2",
  "quote",
