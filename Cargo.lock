@@ -220,7 +220,7 @@ checksum = "56899898ce76aaf4a0f24d914c97ea6ed976d42fec6ad33fcbb0a1103e07b2b0"
 [[package]]
 name = "elements"
 version = "0.16.0"
-source = "git+https://github.com/sanket1729/rust-elements?branch=pset#8e087401bdd4d8ed32b371d7a0ff4deebd3ca277"
+source = "git+https://github.com/sanket1729/rust-elements?branch=pset#f644bada8e821614a32e4557063410041529f7e7"
 dependencies = [
  "bitcoin",
  "bitcoin_hashes 0.9.4",
@@ -337,6 +337,7 @@ dependencies = [
 name = "hal-elements"
 version = "0.1.4"
 dependencies = [
+ "base64-compat",
  "clap",
  "elements",
  "elements-miniscript",

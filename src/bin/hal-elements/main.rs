@@ -15,7 +15,7 @@ use std::process;
 pub use elements::bitcoin;
 
 pub use hal_elements::{GetInfo, Network};
-pub use hal_elements::miniscriptlib;
+pub use hal_elements::{miniscriptlib, base64};
 
 pub mod cmd;
 

@@ -2,6 +2,7 @@ pub mod address;
 pub mod block;
 pub mod tx;
 pub mod miniscript;
+pub mod pset;
 
 use hal_elements::Network;
 
