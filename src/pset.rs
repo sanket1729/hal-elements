@@ -48,7 +48,7 @@ impl ::GetInfo<PsetGlobalInfo> for pset::Global {
 		    scalars: {
 				let mut scalars = Vec::new();
 				for x in &self.scalars {
-					scalars.push(HexBytes::from(x.to_vec()));
+					scalars.push(x.as_ref()[..].into());
 				}
 				scalars
 			},
@@ -258,9 +258,9 @@ impl ::GetInfo<PsetInputInfo> for pset::Input {
 		    issuance_value:
 				self.issuance_value.as_ref().map(|x| x.get_info(network)),
 		    issuance_value_rangeproof:
-				self.issuance_value_rangeproof.as_ref().map(|v| HexBytes::from(v.clone())),
+				self.issuance_value_rangeproof.as_ref().map(|v| HexBytes::from(v.serialize().clone())),
 		    issuance_keys_rangeproof:
-				self.issuance_keys_rangeproof.as_ref().map(|v| HexBytes::from(v.clone())),
+				self.issuance_keys_rangeproof.as_ref().map(|v| HexBytes::from(v.serialize().clone())),
 		    pegin_tx: self.pegin_tx.as_ref().map(|tx| HexBytes::from(encode::serialize(tx))),
 		    pegin_txout_proof:
 				self.pegin_txout_proof.as_ref().map(|v| HexBytes::from(v.clone())),
@@ -350,9 +350,9 @@ impl ::GetInfo<PsetOutputInfo> for pset::Output {
 		    script_pubkey: ::tx::OutputScript(&self.script_pubkey).get_info(network),
 		    asset: self.asset.get_info(network),
 		    value_rangeproof:
-				self.value_rangeproof.as_ref().map(|v| HexBytes::from(v.clone())),
+				self.value_rangeproof.as_ref().map(|v| HexBytes::from(v.serialize().clone())),
 		    asset_surjection_proof:
-				self.asset_surjection_proof.as_ref().map(|v| HexBytes::from(v.clone())),
+				self.asset_surjection_proof.as_ref().map(|v| HexBytes::from(v.serialize().clone())),
 		    blinding_key:
 				self.blinding_key.map(|x| HexBytes::from(x.to_bytes())),
 		    ecdh_pubkey:

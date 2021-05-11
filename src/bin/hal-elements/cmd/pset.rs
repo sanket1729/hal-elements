@@ -6,7 +6,7 @@ use base64;
 use clap;
 use hex;
 
-use elements::secp256k1;
+use elements::secp256k1_zkp;
 use bitcoin::util::bip32;
 use elements::{pset, Transaction, confidential};
 use elements::pset::PartiallySignedTransaction as Pset;
@@ -380,7 +380,7 @@ fn exec_finalize<'a>(matches: &clap::ArgMatches<'a>) {
 
 
 	// Create a secp context, should there be one with static lifetime?
-	let secp = secp256k1::Secp256k1::verification_only();
+	let secp = secp256k1_zkp::Secp256k1::verification_only();
 	::miniscriptlib::pset::finalize(&mut pset, &secp).expect("failed to finalize");
 
 	let finalized_raw = serialize(&pset.extract_tx().expect("Unable to extract tx"));
@@ -501,13 +501,13 @@ fn exec_rawsign<'a>(matches: &clap::ArgMatches<'a>) {
 
 	let sk = if let Ok(privkey) = PrivateKey::from_str(&priv_key) {
 		privkey.key
-	} else if let Ok(sk) = secp256k1::SecretKey::from_str(&priv_key) {
+	} else if let Ok(sk) = secp256k1_zkp::SecretKey::from_str(&priv_key) {
 		sk
 	} else {
 		panic!("invalid WIF/hex private key: {}", priv_key);
 	};
-	let secp = secp256k1::Secp256k1::signing_only();
-	let pk = secp256k1::PublicKey::from_secret_key(&secp, &sk);
+	let secp = secp256k1_zkp::Secp256k1::signing_only();
+	let pk = secp256k1_zkp::PublicKey::from_secret_key(&secp, &sk);
 	let pk = bitcoin::PublicKey {
 		compressed: compressed,
 		key: pk,
