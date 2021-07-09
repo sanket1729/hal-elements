@@ -29,18 +29,15 @@ impl GetInfo<ConfidentialValueInfo> for Value {
 			type_: match self {
 				Value::Null => ConfidentialType::Null,
 				Value::Explicit(_) => ConfidentialType::Explicit,
-				Value::Confidential(_, _) => ConfidentialType::Confidential,
+				Value::Confidential(_) => ConfidentialType::Confidential,
 			},
 			value: match self {
 				Value::Explicit(v) => Some(*v),
 				_ => None,
 			},
 			commitment: match self {
-				Value::Confidential(p, c) => {
-					let mut commitment = Vec::new();
-					commitment.push(*p);
-					commitment.extend(c);
-					Some(commitment[..].into())
+				Value::Confidential(p) => {
+					Some(p.serialize()[..].into())
 				}
 				_ => None,
 			},
@@ -83,18 +80,15 @@ impl GetInfo<ConfidentialAssetInfo> for Asset {
 			type_: match self {
 				Asset::Null => ConfidentialType::Null,
 				Asset::Explicit(_) => ConfidentialType::Explicit,
-				Asset::Confidential(_, _) => ConfidentialType::Confidential,
+				Asset::Confidential(_) => ConfidentialType::Confidential,
 			},
 			asset: match self {
 				Asset::Explicit(a) => Some(*a),
 				_ => None,
 			},
 			commitment: match self {
-				Asset::Confidential(p, c) => {
-					let mut commitment = Vec::new();
-					commitment.push(*p);
-					commitment.extend(c);
-					Some(commitment[..].into())
+				Asset::Confidential(p) => {
+					Some(p.serialize()[..].into())
 				}
 				_ => None,
 			},
@@ -122,18 +116,15 @@ impl GetInfo<ConfidentialNonceInfo> for Nonce {
 			type_: match self {
 				Nonce::Null => ConfidentialType::Null,
 				Nonce::Explicit(_) => ConfidentialType::Explicit,
-				Nonce::Confidential(_, _) => ConfidentialType::Confidential,
+				Nonce::Confidential(_) => ConfidentialType::Confidential,
 			},
 			nonce: match self {
 				Nonce::Explicit(n) => Some(sha256d::Hash::from_inner(*n)),
 				_ => None,
 			},
 			commitment: match self {
-				Nonce::Confidential(p, c) => {
-					let mut commitment = Vec::new();
-					commitment.push(*p);
-					commitment.extend(c);
-					Some(commitment[..].into())
+				Nonce::Confidential(p) => {
+					Some(p.serialize()[..].into())
 				}
 				_ => None,
 			},

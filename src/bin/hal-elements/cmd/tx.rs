@@ -2,8 +2,9 @@ use std::io::Write;
 
 use clap;
 use bitcoin;
-use elements::hashes::Hash;
+use elements::{hashes::Hash, secp256k1_zkp::{RangeProof, SurjectionProof}};
 use elements::Script;
+use elements::secp256k1_zkp;
 use elements::encode::{deserialize, serialize};
 use elements::{
 	confidential, AssetIssuance, OutPoint, Transaction, TxIn, TxInWitness, TxOut, TxOutWitness,
@@ -83,10 +84,6 @@ fn bytes_32(bytes: &[u8]) -> Option<[u8; 32]> {
 	}
 }
 
-fn create_commitment(bytes: Option<hal::HexBytes>) -> (u8, [u8; 32]) {
-	let comm = &bytes.expect("Field \"commitment\" is required for confidential values.").0[..];
-	(comm[0], bytes_32(&comm[1..33]).expect("Invalid size of \"commitment\"."))
-}
 
 fn create_confidential_value(info: ConfidentialValueInfo) -> confidential::Value {
 	match info.type_ {
@@ -95,8 +92,10 @@ fn create_confidential_value(info: ConfidentialValueInfo) -> confidential::Value
 			info.value.expect("Field \"value\" is required for explicit values."),
 		),
 		ConfidentialType::Confidential => {
-			let comm = create_commitment(info.commitment);
-			confidential::Value::Confidential(comm.0, comm.1)
+			let comm = secp256k1_zkp::PedersenCommitment::from_slice(
+				info.commitment.expect("Missing commitment").bytes()
+			).expect("Invalid Confidential commitment");
+			confidential::Value::Confidential(comm)
 		}
 	}
 }
@@ -108,8 +107,10 @@ fn create_confidential_asset(info: ConfidentialAssetInfo) -> confidential::Asset
 			info.asset.expect("Field \"asset\" is required for explicit assets."),
 		),
 		ConfidentialType::Confidential => {
-			let comm = create_commitment(info.commitment);
-			confidential::Asset::Confidential(comm.0, comm.1)
+			let gen = secp256k1_zkp::Generator::from_slice(
+				info.commitment.expect("Missing asset commitment").bytes()
+			).expect("Invalid asset commitment");
+			confidential::Asset::Confidential(gen)
 		}
 	}
 }
@@ -121,21 +122,23 @@ fn create_confidential_nonce(info: ConfidentialNonceInfo) -> confidential::Nonce
 			info.nonce.expect("Field \"nonce\" is required for explicit nonces.").into_inner(),
 		),
 		ConfidentialType::Confidential => {
-			let comm = create_commitment(info.commitment);
-			confidential::Nonce::Confidential(comm.0, comm.1)
+			let comm = secp256k1_zkp::PublicKey::from_slice(
+				info.commitment.expect("Missing nonce commitment").bytes()
+			).expect("Invalid Nonce Pubkey");
+			confidential::Nonce::Confidential(comm)
 		}
 	}
 }
 
 fn create_asset_issuance(info: AssetIssuanceInfo) -> AssetIssuance {
 	AssetIssuance {
-		asset_blinding_nonce: bytes_32(
+		asset_blinding_nonce: secp256k1_zkp::Tweak::from_slice(
 			&info
 				.asset_blinding_nonce
 				.expect("Field \"asset_blinding_nonce\" is required for asset issuances.")
 				.0[..],
 		)
-		.expect("Invalid size of \"asset_blinding_nonce\"."),
+		.expect("Invalid size of \"asset_blinding_nonce\" or blinding nonce out of range"),
 		asset_entropy: bytes_32(
 			&info
 				.asset_entropy
@@ -204,11 +207,13 @@ fn create_input_witness(
 
 	if let Some(wi) = info {
 		TxInWitness {
-			amount_rangeproof: wi.amount_rangeproof.map(|r| r.0).unwrap_or_default(),
+			amount_rangeproof: wi.amount_rangeproof
+				.map(|ref x| RangeProof::from_slice(x.bytes())
+				.expect("Invalid RangeProof")),
 			inflation_keys_rangeproof: wi
 				.inflation_keys_rangeproof
-				.map(|r| r.0)
-				.unwrap_or_default(),
+				.map(|ref x| RangeProof::from_slice(x.bytes())
+				.expect("Invalid RangeProof")),
 			script_witness: match wi.script_witness {
 				Some(ref w) => w.iter().map(|h| h.clone().0).collect(),
 				None => Vec::new(),
@@ -318,8 +323,12 @@ fn create_script_pubkey(spk: OutputScriptInfo, used_network: &mut Option<Network
 
 fn create_output_witness(w: OutputWitnessInfo) -> TxOutWitness {
 	TxOutWitness {
-		surjection_proof: w.surjection_proof.map(|b| b.0).unwrap_or_default(),
-		rangeproof: w.rangeproof.map(|b| b.0).unwrap_or_default(),
+		surjection_proof: w.surjection_proof
+			.map(|ref x| SurjectionProof::from_slice(x.bytes())
+			.expect("Invalid SurjectionProof")),
+		rangeproof: w.rangeproof
+			.map(|ref x| RangeProof::from_slice(x.bytes())
+			.expect("Invalid RangeProof")),
 	}
 }
 

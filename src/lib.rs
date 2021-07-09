@@ -2,10 +2,14 @@ extern crate elements;
 extern crate hal;
 extern crate hex;
 extern crate serde;
+pub extern crate base64;
+pub extern crate elements_miniscript as miniscriptlib;
 
 pub mod address;
 pub mod block;
 pub mod tx;
+pub mod pset;
+pub mod miniscript;
 
 pub mod confidential;
 

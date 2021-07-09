@@ -15,6 +15,7 @@ use std::process;
 pub use elements::bitcoin;
 
 pub use hal_elements::{GetInfo, Network};
+pub use hal_elements::{miniscriptlib, base64};
 
 pub mod cmd;
 
@@ -58,6 +59,8 @@ fn execute_builtin<'a>(matches: &clap::ArgMatches<'a>) -> bool {
 		("address", Some(ref m)) => cmd::address::execute(&m),
 		("block", Some(ref m)) => cmd::block::execute(&m),
 		("tx", Some(ref m)) => cmd::tx::execute(&m),
+		("miniscript", Some(ref m)) => cmd::miniscript::execute(&m),
+		("pset", Some(ref m)) => cmd::pset::execute(&m),
 		_ => return false,
 	};
 	return true;

@@ -1,4 +1,4 @@
-use elements::{secp256k1, Script, PubkeyHash, ScriptHash, WPubkeyHash, WScriptHash};
+use elements::{secp256k1_zkp, Script, PubkeyHash, ScriptHash, WPubkeyHash, WScriptHash};
 use bitcoin::PublicKey;
 use elements::Address;
 use serde::{Deserialize, Serialize};
@@ -22,7 +22,7 @@ pub struct AddressInfo {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub witness_script_hash: Option<WScriptHash>,
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub blinding_pubkey: Option<secp256k1::PublicKey>,
+	pub blinding_pubkey: Option<secp256k1_zkp::PublicKey>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub unconfidential: Option<Address>,
 }
@@ -44,7 +44,7 @@ pub struct Addresses {
 }
 
 impl Addresses {
-	pub fn from_pubkey(pubkey: &PublicKey, blinder: Option<secp256k1::PublicKey>, network: Network) -> Addresses {
+	pub fn from_pubkey(pubkey: &PublicKey, blinder: Option<secp256k1_zkp::PublicKey>, network: Network) -> Addresses {
 		let params = network.address_params();
 		Addresses {
 			p2pkh: Some(Address::p2pkh(pubkey, blinder, params)),
@@ -54,7 +54,7 @@ impl Addresses {
 		}
 	}
 
-	pub fn from_script(script: &Script, blinder: Option<secp256k1::PublicKey>, network: Network) -> Addresses {
+	pub fn from_script(script: &Script, blinder: Option<secp256k1_zkp::PublicKey>, network: Network) -> Addresses {
 		let params = network.address_params();
 		Addresses {
 			p2sh: Some(Address::p2sh(&script, blinder, params)),

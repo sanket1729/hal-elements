@@ -1,6 +1,8 @@
 pub mod address;
 pub mod block;
 pub mod tx;
+pub mod miniscript;
+pub mod pset;
 
 use hal_elements::Network;
 
@@ -10,6 +12,8 @@ pub fn subcommands<'a>() -> Vec<clap::App<'a, 'a>> {
 		address::subcommand(),
 		block::subcommand(),
 		tx::subcommand(),
+		miniscript::subcommand(),
+		pset::subcommand(),
 	]
 }
 

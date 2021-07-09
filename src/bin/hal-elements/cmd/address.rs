@@ -1,6 +1,6 @@
 use elements::hashes::Hash;
 use elements::Address;
-use elements::{secp256k1, WPubkeyHash, WScriptHash};
+use elements::{secp256k1_zkp, WPubkeyHash, WScriptHash};
 use bitcoin::PublicKey;
 use clap;
 
@@ -38,7 +38,7 @@ fn exec_create<'a>(matches: &clap::ArgMatches<'a>) {
 
 	let blinder = matches.value_of("blinder").map(|b| {
 		let bytes = hex::decode(b).expect("invaid blinder hex");
-		secp256k1::PublicKey::from_slice(&bytes).expect("invalid blinder")
+		secp256k1_zkp::PublicKey::from_slice(&bytes).expect("invalid blinder")
 	});
 
 	let created = if let Some(pubkey_hex) = matches.value_of("pubkey") {

@@ -131,8 +131,8 @@ pub struct InputWitnessInfo {
 impl GetInfo<InputWitnessInfo> for TxInWitness {
 	fn get_info(&self, _network: Network) -> InputWitnessInfo {
 		InputWitnessInfo {
-			amount_rangeproof: Some(self.amount_rangeproof[..].into()),
-			inflation_keys_rangeproof: Some(self.inflation_keys_rangeproof[..].into()),
+			amount_rangeproof: self.amount_rangeproof.as_ref().map(|x| x.serialize().into()),
+			inflation_keys_rangeproof: self.inflation_keys_rangeproof.as_ref().map(|x| x.serialize().into()),
 			script_witness: if self.script_witness.len() > 0 {
 				Some(self.script_witness.iter().map(|w| w.clone().into()).collect())
 			} else {
@@ -223,8 +223,8 @@ pub struct OutputWitnessInfo {
 impl GetInfo<OutputWitnessInfo> for TxOutWitness {
 	fn get_info(&self, _network: Network) -> OutputWitnessInfo {
 		OutputWitnessInfo {
-			surjection_proof: Some(self.surjection_proof[..].into()),
-			rangeproof: Some(self.rangeproof[..].into()),
+			surjection_proof: self.surjection_proof.as_ref().map(|x| x.serialize().into()),
+			rangeproof: self.rangeproof.as_ref().map(|x| x.serialize().into()),
 		}
 	}
 }
