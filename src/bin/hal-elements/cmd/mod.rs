@@ -13,6 +13,7 @@ pub fn subcommands<'a>() -> Vec<clap::App<'a, 'a>> {
 		block::subcommand(),
 		tx::subcommand(),
 		miniscript::subcommand(),
+		pset::subcommand(),
 	]
 }
 
