@@ -30,6 +30,7 @@ serde_json = "1.0.34"
 serde_yaml = "0.8.8"
 hex = "0.3.2"
 elements = {version = "0.17.0", features = ["serde-feature"] }
+secp256k1-sys = "=0.4.1"
 
-elements-miniscript = { git = "https://github.com/ElementsProject/elements-miniscript", features = ["compiler", "serde"], branch = "master" }
-hal = {git = "https://github.com/stevenroose/hal", branch = "master"}
+elements-miniscript = { git = "https://github.com/ElementsProject/elements-miniscript", features = ["compiler", "serde"], rev = "2cfa78cf4b84e10a37f124e4f0da2d8c4d554d1b" }
+hal = {git = "https://github.com/stevenroose/hal", rev = "5f03300d4ad73ea5b337e7eb38923a2eed335a25"}
