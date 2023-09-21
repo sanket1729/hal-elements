@@ -1,4 +1,4 @@
-use elements::hashes::sha256;
+use elements::hashes::{sha256, Hash};
 use elements::{BlockHash, TxMerkleNode, Txid};
 use elements::{dynafed, Block, BlockExtData, BlockHeader};
 use serde::{Deserialize, Serialize};
@@ -54,7 +54,7 @@ impl<'a> GetInfo<ParamsInfo> for dynafed::Params {
 			signblockscript: self.signblockscript().map(|s| s.to_bytes().into()),
 			signblock_witness_limit: self.signblock_witness_limit(),
 			elided_root: self.elided_root().map(|r| *r),
-			fedpeg_program: self.fedpeg_program().map(|p| p[..].into()),
+			fedpeg_program: self.fedpeg_program().map(|p| p.as_bytes().into()),
 			fedpeg_script: self.fedpegscript().map(|s| s[..].into()),
 			extension_space: self
 				.extension_space()
@@ -63,7 +63,7 @@ impl<'a> GetInfo<ParamsInfo> for dynafed::Params {
 	}
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
 pub struct BlockHeaderInfo {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub block_hash: Option<BlockHash>,
@@ -83,6 +83,25 @@ pub struct BlockHeaderInfo {
 	pub dynafed_proposed: Option<ParamsInfo>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub dynafed_witness: Option<Vec<HexBytes>>,
+}
+
+impl Default for BlockHeaderInfo {
+    fn default() -> Self {
+        Self {
+			previous_block_hash: BlockHash::all_zeros(),
+			merkle_root: TxMerkleNode::all_zeros(),
+            block_hash: None,
+            version: 0,
+            time: 0,
+            height: 0,
+            dynafed: false,
+            legacy_challenge: None,
+            legacy_solution: None,
+            dynafed_current: None,
+            dynafed_proposed: None,
+            dynafed_witness: None,
+		}
+    }
 }
 
 impl<'a> GetInfo<BlockHeaderInfo> for BlockHeader {

@@ -119,7 +119,7 @@ fn create_confidential_nonce(info: ConfidentialNonceInfo) -> confidential::Nonce
 	match info.type_ {
 		ConfidentialType::Null => confidential::Nonce::Null,
 		ConfidentialType::Explicit => confidential::Nonce::Explicit(
-			info.nonce.expect("Field \"nonce\" is required for explicit nonces.").into_inner(),
+			info.nonce.expect("Field \"nonce\" is required for explicit nonces.").to_byte_array(),
 		),
 		ConfidentialType::Confidential => {
 			let comm = secp256k1_zkp::PublicKey::from_slice(
@@ -208,12 +208,10 @@ fn create_input_witness(
 	if let Some(wi) = info {
 		TxInWitness {
 			amount_rangeproof: wi.amount_rangeproof
-				.map(|ref x| RangeProof::from_slice(x.bytes())
-				.expect("Invalid RangeProof")),
+				.map(|ref x| Box::new(RangeProof::from_slice(x.bytes()).expect("Invalid RangeProof"))),
 			inflation_keys_rangeproof: wi
 				.inflation_keys_rangeproof
-				.map(|ref x| RangeProof::from_slice(x.bytes())
-				.expect("Invalid RangeProof")),
+				.map(|ref x| Box::new(RangeProof::from_slice(x.bytes()).expect("Invalid RangeProof"))),
 			script_witness: match wi.script_witness {
 				Some(ref w) => w.iter().map(|h| h.clone().0).collect(),
 				None => Vec::new(),
@@ -238,7 +236,6 @@ fn create_input(input: InputInfo) -> TxIn {
 		script_sig: input.script_sig.map(create_script_sig).unwrap_or_default(),
 		sequence: input.sequence.unwrap_or_default(),
 		is_pegin: is_pegin,
-		has_issuance: has_issuance,
 		asset_issuance: if has_issuance {
 			input.asset_issuance.map(create_asset_issuance).unwrap_or_default()
 		} else {
@@ -249,7 +246,7 @@ fn create_input(input: InputInfo) -> TxIn {
 		},
 		witness: {
 			let btc_prevout = bitcoin::OutPoint::new(
-				bitcoin::Txid::from_hash(prevout.txid.into()),
+				bitcoin::Txid::from_raw_hash(prevout.txid.into()),
 				 prevout.vout
 			);
 			create_input_witness(input.witness, input.pegin_data, btc_prevout)
@@ -257,7 +254,7 @@ fn create_input(input: InputInfo) -> TxIn {
 	}
 }
 
-fn create_pegout_script_pubkey(spk: hal::tx::OutputScriptInfo) -> bitcoin::Script {
+fn create_pegout_script_pubkey(spk: hal::tx::OutputScriptInfo) -> bitcoin::ScriptBuf {
 	if spk.type_.is_some() {
 		warn!("Field \"type\" of output is ignored.");
 	}
@@ -280,7 +277,7 @@ fn create_pegout_script_pubkey(spk: hal::tx::OutputScriptInfo) -> bitcoin::Scrip
 		//TODO(stevenroose) support script disassembly
 		panic!("Decoding script assembly is not yet supported.");
 	} else if let Some(address) = spk.address {
-		address.script_pubkey()
+		address.assume_checked().script_pubkey()
 	} else {
 		panic!("No scriptPubKey info provided.");
 	}
@@ -324,11 +321,11 @@ fn create_script_pubkey(spk: OutputScriptInfo, used_network: &mut Option<Network
 fn create_output_witness(w: OutputWitnessInfo) -> TxOutWitness {
 	TxOutWitness {
 		surjection_proof: w.surjection_proof
-			.map(|ref x| SurjectionProof::from_slice(x.bytes())
-			.expect("Invalid SurjectionProof")),
+			.map(|ref x| Box::new(SurjectionProof::from_slice(x.bytes())
+			.expect("Invalid SurjectionProof"))),
 		rangeproof: w.rangeproof
-			.map(|ref x| RangeProof::from_slice(x.bytes())
-			.expect("Invalid RangeProof")),
+			.map(|ref x| Box::new(RangeProof::from_slice(x.bytes())
+			.expect("Invalid RangeProof"))),
 	}
 }
 
@@ -339,8 +336,8 @@ fn create_script_pubkey_from_pegout_data(
 ) -> Script {
 	let mut builder = elements::script::Builder::new()
 		.push_opcode(elements::opcodes::all::OP_RETURN)
-		.push_slice(&pd.genesis_hash.into_inner()[..])
-		.push_slice(&create_pegout_script_pubkey(pd.script_pub_key)[..]);
+		.push_slice(&pd.genesis_hash.to_byte_array())
+		.push_slice(&create_pegout_script_pubkey(pd.script_pub_key).as_bytes());
 	for d in pd.extra_data {
 		builder = builder.push_slice(&d.0);
 	}

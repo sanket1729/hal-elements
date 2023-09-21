@@ -110,7 +110,8 @@ pub struct PolicyInfo {
 	pub is_unsatisfiable: bool,
 	pub relative_timelocks: Vec<u32>,
 	pub n_keys: usize,
-	pub minimum_n_keys: usize,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub minimum_n_keys: Option<usize>,
 	pub sorted: String,
 	pub normalized: String,
 	#[serde(skip_serializing_if = "Option::is_none")]

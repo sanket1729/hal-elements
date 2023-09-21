@@ -1,8 +1,11 @@
+use elements::pset::PsbtSighashType;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use bitcoin::util::bip32;
-use elements::SigHashType;
+use elements::locktime::LockTime;
+
+use bitcoin::bip32;
+use elements::{EcdsaSighashType, confidential};
 use elements::hashes::Hash;
 use elements::{pset, encode};
 use Network;
@@ -15,7 +18,7 @@ pub struct PsetGlobalInfo {
 	pub tx_version: u32,
 	pub num_inputs: u32,
 	pub num_outputs: u32,
-	pub fallback_locktime: u32,
+	pub fallback_locktime: LockTime,
 	pub tx_modifiable: u8,
 	#[serde(skip_serializing_if = "HashMap::is_empty")]
 	pub xpub: HashMap<String, String>,
@@ -35,7 +38,7 @@ impl ::GetInfo<PsetGlobalInfo> for pset::Global {
 		    tx_version: self.tx_data.version,
 		    num_inputs: self.n_inputs() as u32,
 		    num_outputs: self.n_outputs() as u32,
-		    fallback_locktime: self.tx_data.fallback_locktime.unwrap_or(0),
+		    fallback_locktime: self.tx_data.fallback_locktime.unwrap_or(LockTime::ZERO),
 		    tx_modifiable: self.tx_data.tx_modifiable.unwrap_or(0),
 		    xpub: {
 				let mut xpubs = HashMap::new();
@@ -83,9 +86,9 @@ pub struct HDPathInfo {
 	pub path: bip32::DerivationPath,
 }
 
-pub fn sighashtype_to_string(sht: SigHashType) -> String {
-	use elements::SigHashType::*;
-	match sht {
+pub fn sighashtype_to_string(sht: PsbtSighashType) -> String {
+	use elements::EcdsaSighashType::*;
+	match sht.ecdsa_hash_ty().expect("Taproot sighash not yet supported") {
 		All => "ALL",
 		None => "NONE",
 		Single => "SINGLE",
@@ -99,8 +102,8 @@ pub fn sighashtype_values() -> &'static [&'static str] {
 	&["ALL", "NONE", "SINGLE", "ALL|ANYONECANPAY", "NONE|ANYONECANPAY", "SINGLE|ANYONECANPAY"]
 }
 
-pub fn sighashtype_from_string(sht: &str) -> SigHashType {
-	use elements::SigHashType::*;
+pub fn sighashtype_from_string(sht: &str) -> EcdsaSighashType {
+	use elements::EcdsaSighashType::*;
 	match sht {
 		"ALL" => All,
 		"NONE" => None,
@@ -142,13 +145,15 @@ pub struct PsetInputInfo {
     pub hash256_preimages: HashMap<::HexBytes, ::HexBytes>,
     pub previous_txid: ::HexBytes,
     pub previous_output_index: u32,
-    pub sequence: u32,
+    pub sequence: elements::Sequence,
 	#[serde(skip_serializing_if = "Option::is_none")]
-    pub required_time_locktime: Option<u32>,
+    pub required_time_locktime: Option<elements::locktime::Time>,
 	#[serde(skip_serializing_if = "Option::is_none")]
-    pub required_height_locktime: Option<u32>,
+    pub required_height_locktime: Option<elements::locktime::Height>,
 	#[serde(skip_serializing_if = "Option::is_none")]
-    pub issuance_value: Option<::confidential::ConfidentialValueInfo>,
+    pub issuance_value_amount: Option<::confidential::ConfidentialValueInfo>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+    pub issuance_value_comm: Option<::confidential::ConfidentialValueInfo>,
 	#[serde(skip_serializing_if = "Option::is_none")]
     pub issuance_value_rangeproof: Option<::HexBytes>,
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -167,6 +172,8 @@ pub struct PsetInputInfo {
     pub pegin_witness: Option<Vec<::HexBytes>>,
 	#[serde(skip_serializing_if = "Option::is_none")]
     pub issuance_inflation_keys: Option<::confidential::ConfidentialValueInfo>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+    pub issuance_inflation_keys_comm: Option<::confidential::ConfidentialValueInfo>,
 	#[serde(skip_serializing_if = "Option::is_none")]
     pub issuance_blinding_nonce: Option<::HexBytes>,
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -199,7 +206,7 @@ impl ::GetInfo<PsetInputInfo> for pset::Input {
 				for (key, value) in self.bip32_derivation.iter() {
 					hd_keypaths.insert(key.to_bytes().into(),
 						HDPathInfo {
-							master_fingerprint: value.0[..].into(),
+							master_fingerprint: value.0,
 							path: value.1.clone(),
 						},
 					);
@@ -214,7 +221,7 @@ impl ::GetInfo<PsetInputInfo> for pset::Input {
 				let mut ripemd160_map = HashMap::new();
 				for (k, v) in &self.ripemd160_preimages{
 					ripemd160_map.insert(
-						HexBytes::from(k.as_inner().to_vec()),
+						HexBytes::from(k.to_byte_array().to_vec()),
 						HexBytes::from(v.to_vec())
 					);
 				}
@@ -224,7 +231,7 @@ impl ::GetInfo<PsetInputInfo> for pset::Input {
 				let mut sha256_map = HashMap::new();
 				for (k, v) in &self.sha256_preimages{
 					sha256_map.insert(
-						HexBytes::from(k.as_inner().to_vec()),
+						HexBytes::from(k.to_byte_array().to_vec()),
 						HexBytes::from(v.to_vec())
 					);
 				}
@@ -234,7 +241,7 @@ impl ::GetInfo<PsetInputInfo> for pset::Input {
 				let mut hash160_map = HashMap::new();
 				for (k, v) in &self.hash160_preimages{
 					hash160_map.insert(
-						HexBytes::from(k.as_inner().to_vec()),
+						HexBytes::from(k.to_byte_array().to_vec()),
 						HexBytes::from(v.to_vec())
 					);
 				}
@@ -244,34 +251,38 @@ impl ::GetInfo<PsetInputInfo> for pset::Input {
 				let mut hash256_map = HashMap::new();
 				for (k, v) in &self.hash256_preimages{
 					hash256_map.insert(
-						HexBytes::from(k.as_inner().to_vec()),
+						HexBytes::from(k.to_byte_array().to_vec()),
 						HexBytes::from(v.to_vec())
 					);
 				}
 				hash256_map
 			},
-		    previous_txid: HexBytes::from(self.previous_txid.as_inner().to_vec()),
+		    previous_txid: HexBytes::from(self.previous_txid.to_byte_array().to_vec()),
 		    previous_output_index: self.previous_output_index,
-		    sequence: self.sequence.unwrap_or(0xffffffff),
+		    sequence: self.sequence.unwrap_or(elements::Sequence::MAX),
 		    required_time_locktime: self.required_time_locktime,
 		    required_height_locktime: self.required_height_locktime,
-		    issuance_value:
-				self.issuance_value.as_ref().map(|x| x.get_info(network)),
+		    issuance_value_amount:
+				self.issuance_value_amount.as_ref().map(|x| confidential::Value::Explicit(*x).get_info(network)),
+			issuance_value_comm:
+				self.issuance_value_comm.as_ref().map(|x| confidential::Value::Confidential(*x).get_info(network)),
 		    issuance_value_rangeproof:
-				self.issuance_value_rangeproof.as_ref().map(|v| HexBytes::from(v.serialize().clone())),
+				self.issuance_value_rangeproof.as_ref().map(|v| HexBytes::from(v.as_ref().serialize().clone())),
 		    issuance_keys_rangeproof:
-				self.issuance_keys_rangeproof.as_ref().map(|v| HexBytes::from(v.serialize().clone())),
+				self.issuance_keys_rangeproof.as_ref().map(|v| HexBytes::from(v.as_ref().serialize().clone())),
 		    pegin_tx: self.pegin_tx.as_ref().map(|tx| HexBytes::from(encode::serialize(tx))),
 		    pegin_txout_proof:
 				self.pegin_txout_proof.as_ref().map(|v| HexBytes::from(v.clone())),
-		    pegin_genesis_hash: self.pegin_genesis_hash.map(|x| HexBytes::from(x.as_inner().to_vec())),
+		    pegin_genesis_hash: self.pegin_genesis_hash.map(|x| HexBytes::from(x.to_byte_array().to_vec())),
 		    pegin_claim_script:
 				self.pegin_claim_script.as_ref().map(|x| ::tx::InputScript(x).get_info(network)),
 		    pegin_value: self.pegin_value,
 		    pegin_witness: self.pegin_witness.as_ref()
 				.map(|w| w.iter().map(|p| p.clone().into()).collect()),
 		    issuance_inflation_keys:
-				self.issuance_inflation_keys.as_ref().map(|x| x.get_info(network)),
+				self.issuance_inflation_keys.as_ref().map(|x| confidential::Value::Explicit(*x).get_info(network)),
+			issuance_inflation_keys_comm:
+				self.issuance_inflation_keys_comm.as_ref().map(|x| confidential::Value::Confidential(*x).get_info(network)),
 		    issuance_blinding_nonce:
 				self.issuance_blinding_nonce.map(|x| HexBytes::from(encode::serialize(&x))),
 		    issuance_asset_entropy:
@@ -308,9 +319,9 @@ pub struct PsetOutputInfo {
 	pub witness_script: Option<::tx::OutputScriptInfo>,
 	#[serde(skip_serializing_if = "HashMap::is_empty")]
 	pub hd_keypaths: HashMap<::HexBytes, HDPathInfo>,
-	pub amount: ::confidential::ConfidentialValueInfo,
+	pub amount: Option<::confidential::ConfidentialValueInfo>,
 	pub script_pubkey: ::tx::OutputScriptInfo,
-	pub asset: ::confidential::ConfidentialAssetInfo,
+	pub asset: Option<::confidential::ConfidentialAssetInfo>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub value_rangeproof: Option<::HexBytes>,
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -339,20 +350,20 @@ impl ::GetInfo<PsetOutputInfo> for pset::Output {
 				for (key, value) in self.bip32_derivation.iter() {
 					hd_keypaths.insert(key.to_bytes().into(),
 						HDPathInfo {
-							master_fingerprint: value.0[..].into(),
+							master_fingerprint: value.0,
 							path: value.1.clone(),
 						},
 					);
 				}
 				hd_keypaths
 			},
-		    amount: self.amount.get_info(network),
+		    amount: self.amount.map(|x| confidential::Value::Explicit(x).get_info(network)),
 		    script_pubkey: ::tx::OutputScript(&self.script_pubkey).get_info(network),
-		    asset: self.asset.get_info(network),
+		    asset: self.asset.map(|x| confidential::Asset::Explicit(x).get_info(network)),
 		    value_rangeproof:
-				self.value_rangeproof.as_ref().map(|v| HexBytes::from(v.serialize().clone())),
+				self.value_rangeproof.as_ref().map(|v| HexBytes::from(v.as_ref().serialize().clone())),
 		    asset_surjection_proof:
-				self.asset_surjection_proof.as_ref().map(|v| HexBytes::from(v.serialize().clone())),
+				self.asset_surjection_proof.as_ref().map(|v| HexBytes::from(v.as_ref().serialize().clone())),
 		    blinding_key:
 				self.blinding_key.map(|x| HexBytes::from(x.to_bytes())),
 		    ecdh_pubkey:
@@ -393,8 +404,8 @@ impl ::GetInfo<PsetInfo> for pset::PartiallySignedTransaction {
 	fn get_info(&self, network: Network) -> PsetInfo {
 		PsetInfo {
 			global: self.global.get_info(network),
-			inputs: self.inputs.iter().map(|i| i.get_info(network)).collect(),
-			outputs: self.outputs.iter().map(|o| o.get_info(network)).collect(),
+			inputs: self.inputs().iter().map(|i| i.get_info(network)).collect(),
+			outputs: self.outputs().iter().map(|o| o.get_info(network)).collect(),
 		}
 	}
 }

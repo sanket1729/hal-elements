@@ -104,7 +104,7 @@ impl<'tx> GetInfo<PeginDataInfo> for PeginData<'tx> {
 		PeginDataInfo {
 			outpoint: self.outpoint.to_string(),
 			value: self.value,
-			asset: self.asset.get_info(network),
+			asset: confidential::Asset::Explicit(self.asset).get_info(network),
 			genesis_hash: self.genesis_hash,
 			claim_script: self.claim_script.into(),
 			mainchain_tx_hex: self.tx.into(),
@@ -131,8 +131,8 @@ pub struct InputWitnessInfo {
 impl GetInfo<InputWitnessInfo> for TxInWitness {
 	fn get_info(&self, _network: Network) -> InputWitnessInfo {
 		InputWitnessInfo {
-			amount_rangeproof: self.amount_rangeproof.as_ref().map(|x| x.serialize().into()),
-			inflation_keys_rangeproof: self.inflation_keys_rangeproof.as_ref().map(|x| x.serialize().into()),
+			amount_rangeproof: self.amount_rangeproof.as_ref().map(|x| x.as_ref().serialize().into()),
+			inflation_keys_rangeproof: self.inflation_keys_rangeproof.as_ref().map(|x| x.as_ref().serialize().into()),
 			script_witness: if self.script_witness.len() > 0 {
 				Some(self.script_witness.iter().map(|w| w.clone().into()).collect())
 			} else {
@@ -153,7 +153,7 @@ pub struct InputInfo {
 	pub txid: Option<elements::Txid>,
 	pub vout: Option<u32>,
 	pub script_sig: Option<InputScriptInfo>,
-	pub sequence: Option<u32>,
+	pub sequence: Option<elements::Sequence>,
 
 	pub is_pegin: Option<bool>,
 	pub has_issuance: Option<bool>,
@@ -177,8 +177,8 @@ impl GetInfo<InputInfo> for TxIn {
 			script_sig: Some(GetInfo::get_info(&InputScript(&self.script_sig), network)),
 
 			is_pegin: Some(self.is_pegin),
-			has_issuance: Some(self.has_issuance),
-			asset_issuance: if self.has_issuance {
+			has_issuance: Some(self.has_issuance()),
+			asset_issuance: if self.has_issuance() {
 				Some(self.asset_issuance.get_info(network))
 			} else {
 				None
@@ -223,8 +223,8 @@ pub struct OutputWitnessInfo {
 impl GetInfo<OutputWitnessInfo> for TxOutWitness {
 	fn get_info(&self, _network: Network) -> OutputWitnessInfo {
 		OutputWitnessInfo {
-			surjection_proof: self.surjection_proof.as_ref().map(|x| x.serialize().into()),
-			rangeproof: self.rangeproof.as_ref().map(|x| x.serialize().into()),
+			surjection_proof: self.surjection_proof.as_ref().map(|x| x.as_ref().serialize().into()),
+			rangeproof: self.rangeproof.as_ref().map(|x| x.as_ref().serialize().into()),
 		}
 	}
 }
@@ -281,7 +281,7 @@ pub struct TransactionInfo {
 	pub weight: Option<usize>,
 	pub vsize: Option<usize>,
 	pub version: Option<u32>,
-	pub locktime: Option<u32>,
+	pub locktime: Option<elements::LockTime>,
 	pub inputs: Option<Vec<InputInfo>>,
 	pub outputs: Option<Vec<OutputInfo>>,
 }
@@ -295,8 +295,8 @@ impl GetInfo<TransactionInfo> for Transaction {
 			version: Some(self.version),
 			locktime: Some(self.lock_time),
 			size: Some(serialize(self).len()),
-			weight: Some(self.get_weight() as usize),
-			vsize: Some((self.get_weight() / 4) as usize),
+			weight: Some(self.weight() as usize),
+			vsize: Some((self.weight() / 4) as usize),
 			inputs: Some(self.input.iter().map(|i| i.get_info(network)).collect()),
 			outputs: Some(self.output.iter().map(|o| o.get_info(network)).collect()),
 		}

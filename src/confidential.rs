@@ -119,7 +119,7 @@ impl GetInfo<ConfidentialNonceInfo> for Nonce {
 				Nonce::Confidential(_) => ConfidentialType::Confidential,
 			},
 			nonce: match self {
-				Nonce::Explicit(n) => Some(sha256d::Hash::from_inner(*n)),
+				Nonce::Explicit(n) => Some(sha256d::Hash::from_byte_array(*n)),
 				_ => None,
 			},
 			commitment: match self {

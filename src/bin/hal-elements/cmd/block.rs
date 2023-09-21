@@ -44,28 +44,29 @@ fn create_params(info: ParamsInfo) -> dynafed::Params {
 				.expect("signblock_witness_limit missing in compact params"),
 			elided_root: info.elided_root.expect("elided_root missing in compact params"),
 		},
-		ParamsType::Full => dynafed::Params::Full {
-			signblockscript: info
-				.signblockscript
-				.expect("signblockscript missing in full params")
-				.0
-				.into(),
-			signblock_witness_limit: info
-				.signblock_witness_limit
-				.expect("signblock_witness_limit missing in full params"),
-			fedpeg_program: info
-				.fedpeg_program
-				.expect("fedpeg_program missing in full params")
-				.0
-				.into(),
-			fedpegscript: info.fedpeg_script.expect("fedpeg_script missing in full params").0,
-			extension_space: info
-				.extension_space
-				.expect("extension space missing in full params")
-				.into_iter()
-				.map(|b| b.0)
-				.collect(),
-		},
+		ParamsType::Full => todo!("ELEMENTS BUG: Fullparams is not public")
+		// dynafed::Params::Full(FullParams {
+		// 	signblockscript: info
+		// 		.signblockscript
+		// 		.expect("signblockscript missing in full params")
+		// 		.0
+		// 		.into(),
+		// 	signblock_witness_limit: info
+		// 		.signblock_witness_limit
+		// 		.expect("signblock_witness_limit missing in full params"),
+		// 	fedpeg_program: info
+		// 		.fedpeg_program
+		// 		.expect("fedpeg_program missing in full params")
+		// 		.0
+		// 		.into(),
+		// 	fedpegscript: info.fedpeg_script.expect("fedpeg_script missing in full params").0,
+		// 	extension_space: info
+		// 		.extension_space
+		// 		.expect("extension space missing in full params")
+		// 		.into_iter()
+		// 		.map(|b| b.0)
+		// 		.collect(),
+		// }),
 	}
 }
 

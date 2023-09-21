@@ -10,7 +10,7 @@ use miniscriptlib;
 use miniscriptlib::descriptor::Descriptor;
 use miniscriptlib::miniscript::{BareCtx, Legacy, Miniscript, Segwitv0};
 use miniscriptlib::policy::Liftable;
-use miniscriptlib::{policy, DescriptorTrait, MiniscriptKey};
+use miniscriptlib::{policy, MiniscriptKey};
 
 use cmd;
 
@@ -50,8 +50,8 @@ fn exec_descriptor<'a>(matches: &clap::ArgMatches<'a>) {
 			address: desc.address(network.address_params()).map(|a| a.to_string()).ok(),
 			script_pubkey: Some(desc.script_pubkey().into_bytes().into()),
 			unsigned_script_sig: Some(desc.unsigned_script_sig().into_bytes().into()),
-			witness_script: Some(desc.explicit_script().into_bytes().into()),
-			max_satisfaction_weight: desc.max_satisfaction_weight().ok(),
+			witness_script: desc.explicit_script().ok().map(|x| x.as_bytes().into()),
+			max_satisfaction_weight: desc.max_weight_to_satisfy().ok(),
 			policy: policy::Liftable::lift(&desc).map(|pol| pol.to_string()).ok(),
 		    descriptor_info: Some(desc.desc_type().to_string()),
 		})
@@ -64,7 +64,7 @@ fn exec_descriptor<'a>(matches: &clap::ArgMatches<'a>) {
 				script_pubkey: None,
 				unsigned_script_sig: None,
 				witness_script: None,
-				max_satisfaction_weight: desc.max_satisfaction_weight().ok(),
+				max_satisfaction_weight: desc.max_weight_to_satisfy().ok(),
 				policy: policy::Liftable::lift(&desc).map(|pol| pol.to_string()).ok(),
 			    descriptor_info: Some(desc.desc_type().to_string()),
 			})
@@ -178,9 +178,15 @@ fn get_policy_info<Pk: MiniscriptKey>(
 ) -> Result<PolicyInfo, miniscriptlib::Error>
 where
 	Pk: std::str::FromStr,
-	Pk::Hash: std::str::FromStr,
-	<<Pk as miniscriptlib::MiniscriptKey>::Hash as ::std::str::FromStr>::Err: ::std::fmt::Display,
 	<Pk as ::std::str::FromStr>::Err: ::std::fmt::Display,
+	Pk::Sha256: std::str::FromStr,
+	<<Pk as miniscriptlib::MiniscriptKey>::Sha256 as ::std::str::FromStr>::Err: ::std::fmt::Display,
+	Pk::Hash160: std::str::FromStr,
+	<<Pk as miniscriptlib::MiniscriptKey>::Hash160 as ::std::str::FromStr>::Err: ::std::fmt::Display,
+	Pk::Hash256: std::str::FromStr,
+	<<Pk as miniscriptlib::MiniscriptKey>::Hash256 as ::std::str::FromStr>::Err: ::std::fmt::Display,
+	Pk::Ripemd160: std::str::FromStr,
+	<<Pk as miniscriptlib::MiniscriptKey>::Ripemd160 as ::std::str::FromStr>::Err: ::std::fmt::Display,
 {
 	let concrete_pol: Option<policy::Concrete<Pk>> = policy_str.parse().ok();
 	let policy = match concrete_pol {

@@ -4,17 +4,18 @@ use std::str::FromStr;
 
 use base64;
 use clap;
+use elements::hashes::Hash;
 use hex;
 
-use elements::secp256k1_zkp;
-use bitcoin::util::bip32;
-use elements::{pset, Transaction, confidential};
-use elements::pset::PartiallySignedTransaction as Pset;
+use elements::{secp256k1_zkp, BlockHash};
+use bitcoin::bip32;
+use elements::{pset, Transaction};
+use elements::pset::{PartiallySignedTransaction as Pset, PsbtSighashType};
 use bitcoin::{self, PrivateKey, PublicKey};
 use elements::encode::{serialize, deserialize};
-use miniscriptlib;
 
 use cmd;
+use miniscriptlib::psbt::PsbtExt;
 
 pub fn subcommand<'a>() -> clap::App<'a, 'a> {
 	cmd::subcommand_group("pset", "partially signed Elements transactions")
@@ -224,7 +225,9 @@ fn parse_hd_keypath_triplet(
 		if raw.len() != 4 {
 			panic!("invalid HD keypath fingerprint size: {} instead of 4", raw.len());
 		}
-		raw[..].into()
+		let mut res = [0; 4];
+		res.copy_from_slice(&raw);
+		res.into()
 	};
 	let path = triplet
 		.next()
@@ -239,7 +242,7 @@ fn edit_input<'a>(
 	matches: &clap::ArgMatches<'a>,
 	pset: &mut pset::PartiallySignedTransaction,
 ) {
-	let input = pset.inputs.get_mut(idx).expect("input index out of range");
+	let input = pset.inputs_mut().get_mut(idx).expect("input index out of range");
 
 	if let Some(hex) = matches.value_of("non-witness-utxo") {
 		let raw = hex::decode(&hex).expect("invalid non-witness-utxo hex");
@@ -265,7 +268,8 @@ fn edit_input<'a>(
 	}
 
 	if let Some(sht) = matches.value_of("sighash-type") {
-		input.sighash_type = Some(hal_elements::pset::sighashtype_from_string(&sht));
+		input.sighash_type = Some(
+			PsbtSighashType::from_u32(hal_elements::pset::sighashtype_from_string(&sht).as_u32()));
 	}
 
 	if let Some(hex) = matches.value_of("redeem-script") {
@@ -306,7 +310,7 @@ fn edit_output<'a>(
 	matches: &clap::ArgMatches<'a>,
 	pset: &mut pset::PartiallySignedTransaction,
 ) {
-	let output = pset.outputs.get_mut(idx).expect("output index out of range");
+	let output = pset.outputs_mut().get_mut(idx).expect("output index out of range");
 
 	if let Some(hex) = matches.value_of("redeem-script") {
 		let raw = hex::decode(&hex).expect("invalid redeem-script hex");
@@ -381,7 +385,7 @@ fn exec_finalize<'a>(matches: &clap::ArgMatches<'a>) {
 
 	// Create a secp context, should there be one with static lifetime?
 	let secp = secp256k1_zkp::Secp256k1::verification_only();
-	::miniscriptlib::pset::finalize(&mut pset, &secp).expect("failed to finalize");
+	::miniscriptlib::psbt::finalize(&mut pset, &secp, elements::BlockHash::all_zeros()).expect("failed to finalize");
 
 	let finalized_raw = serialize(&pset.extract_tx().expect("Unable to extract tx"));
 	if matches.is_present("raw-stdout") {
@@ -449,24 +453,6 @@ fn cmd_rawsign<'a>() -> clap::App<'a, 'a> {
 	])
 }
 
-// Get the scriptpubkey/amount for the pset input
-fn get_spk_amt(pset: &pset::PartiallySignedTransaction, index: usize) -> (&elements::Script, confidential::Value) {
-	let script_pubkey;
-	let amt;
-	let inp = &pset.inputs[index];
-	if let Some(ref witness_utxo) = inp.witness_utxo {
-		script_pubkey = &witness_utxo.script_pubkey;
-		amt = witness_utxo.value;
-	} else if let Some(ref non_witness_utxo) = inp.non_witness_utxo {
-		let vout = pset.inputs[index].previous_output_index;
-		script_pubkey = &non_witness_utxo.output[vout as usize].script_pubkey;
-		amt = non_witness_utxo.output[vout as usize].value;
-	} else {
-		panic!("Pset missing both witness and non-witness utxo")
-	}
-	(script_pubkey, amt)
-}
-
 fn exec_rawsign<'a>(matches: &clap::ArgMatches<'a>) {
 	let (raw, source) = file_or_raw(&matches.value_of("pset").unwrap());
 	let mut pset: pset::PartiallySignedTransaction = deserialize(&raw).expect("invalid PSET format");
@@ -477,30 +463,21 @@ fn exec_rawsign<'a>(matches: &clap::ArgMatches<'a>) {
 	let compressed = matches.value_of("compressed").unwrap()
 		.parse::<bool>().expect("Compressed must be boolean");
 
-	if i >= pset.inputs.len() {
+	if i >= pset.inputs().len() {
 		panic!("Pset input index out of range")
 	}
-	let (spk, amt) = get_spk_amt(&pset, i);
-	let redeem_script = pset.inputs[i].redeem_script.as_ref().map(|x|
-		elements::script::Builder::new()
-		.push_slice(x.as_bytes())
-		.into_script());
-	let witness_script = pset.inputs[i].witness_script.as_ref()
-		.map(|x| vec![x.clone().into_bytes()]);
-	let witness = witness_script.unwrap_or(Vec::new());
-	let script_sig = redeem_script.unwrap_or(elements::Script::new());
 
 	// Call with age and height 0.
 	// TODO: Create a method to rust-bitcoin pset that outputs sighash
 	// Workaround using miniscript interpreter
-	let interp = miniscriptlib::Interpreter::from_txdata(spk, &script_sig, &witness, 0, 0)
-		.expect("Witness/Redeem Script is not a Miniscript");
-	let sighash_ty = pset.inputs[i].sighash_type.unwrap_or(elements::SigHashType::All);
+	let sighash_ty = pset.inputs_mut()[i].sighash_type.unwrap_or(elements::pset::PsbtSighashType::from_u32(1));
 	let tx = pset.extract_tx().expect("Unable to extract tx");
-	let msg = interp.sighash_message(&tx, i, amt, sighash_ty);
+	let mut sighash_cache = elements::sighash::SighashCache::new(&tx);
+	let msg = pset.sighash_msg(i, &mut sighash_cache, None, BlockHash::all_zeros())
+		.expect("Unable to create sighash message");
 
 	let sk = if let Ok(privkey) = PrivateKey::from_str(&priv_key) {
-		privkey.key
+		privkey.inner
 	} else if let Ok(sk) = secp256k1_zkp::SecretKey::from_str(&priv_key) {
 		sk
 	} else {
@@ -510,14 +487,14 @@ fn exec_rawsign<'a>(matches: &clap::ArgMatches<'a>) {
 	let pk = secp256k1_zkp::PublicKey::from_secret_key(&secp, &sk);
 	let pk = bitcoin::PublicKey {
 		compressed: compressed,
-		key: pk,
+		inner: pk,
 	};
-	let secp_sig = secp.sign(&msg, &sk);
+	let secp_sig = secp.sign_ecdsa(&msg.to_secp_msg(), &sk);
 	let mut btc_sig = secp_sig.serialize_der().as_ref().to_vec();
-	btc_sig.push(sighash_ty as u8);
+	btc_sig.push(sighash_ty.to_u32() as u8); // Safe cast of sighash type. Will be improved in rust-elements later
 
 	// mutate the pset
-	pset.inputs[i].partial_sigs.insert(pk, btc_sig);
+	pset.inputs_mut()[i].partial_sigs.insert(pk, btc_sig);
 	let raw = serialize(&pset);
 	if let Some(path) = matches.value_of("output") {
 		let mut file = File::create(&path).expect("failed to open output file");
